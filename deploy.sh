@@ -39,10 +39,10 @@
 #   - gcloud beta (sudo gcloud components install beta)
 #   - terraform
 #   - .jq (command line JSON parser)
-#   - kubectrl (sudo gcloud components install kubectl) to Trigger the Airflow 2 DAG (This is not installed on Cloud Shell by default)
+#   - kubectl (sudo gcloud components install kubectl) to Trigger the Airflow 2 DAG (This is not installed on Cloud Shell by default)
 #   - curl
 #
-# Author: Adam Paternostro
+# Author: Adam Paternostro, Eva Khmelinskaya
 # Terraform for Google: https://registry.terraform.io/providers/hashicorp/google/latest/docs
 ####################################################################################
 
@@ -104,9 +104,9 @@ echo "billing_account:  ${billing_account}"
 echo "org_id:           ${org_id}"
 
 
-echo "*********************************************************"
-read -p "Press [Enter] key if all the above items are set (gcp_account_name, org_id, billing_account). If not press Ctrl+C ..."
-echo "*********************************************************"
+#echo "*********************************************************"
+#read -p "Press [Enter] key if all the above items are set (gcp_account_name, org_id, billing_account). If not press Ctrl+C ..."
+#echo "*********************************************************"
 
 
 ####################################################################################
@@ -116,6 +116,7 @@ currentDir=$(pwd -P)
 export TF_LOG=INFO
 export TF_LOG_PATH="${currentDir}/tf.log"
 
+project_id=prior-auth-demo
 cd "./terraform"
 
 # Initialize Terraform
@@ -124,14 +125,14 @@ terraform init
 # Validate
 terraform validate
 
-echo "terraform apply -var=\"gcp_account_name=${gcp_account_name}\" -var=\"org_id=${org_id}\" -var=\"billing_account=${billing_account}\" -var=\"project_id=data-analytics-demo\""
+echo "terraform apply -var=\"gcp_account_name=${gcp_account_name}\" -var=\"org_id=${org_id}\" -var=\"billing_account=${billing_account}\" -var=\"project_id=${project_id}\""
 
 # Run the Terraform Apply
 terraform apply \
   -var="gcp_account_name=${gcp_account_name}" \
   -var="org_id=${org_id}" \
   -var="billing_account=${billing_account}" \
-  -var="project_id=data-analytics-demo"
+  -var="project_id=${project_id}"
 
 # NOTE: To deploy for BQ OMNI you need to also include there arguments to the terraform apply
 #  -var="omni_dataset=gcp_project_name_setup_for_omni.my_dataset_name_for_omni" \
@@ -143,7 +144,7 @@ terraform apply \
 
 cd ..
 
-echo "terraform apply -var=\"gcp_account_name=${gcp_account_name}\" -var=\"org_id=${org_id}\" -var=\"billing_account=${billing_account}\" -var=\"project_id=data-analytics-demo\""
+echo "terraform apply -var=\"gcp_account_name=${gcp_account_name}\" -var=\"org_id=${org_id}\" -var=\"billing_account=${billing_account}\" -var=\"project_id=${project_id}\""
 
 echo "*********************************************************"
 echo "Done"

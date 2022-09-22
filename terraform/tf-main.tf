@@ -36,7 +36,7 @@
 #
 # Review the parameters.  If a Project Number is passed in, it is assumed the GCP project has been created.
 #
-# Author: Adam Paternostro
+# Author: Adam Paternostro, Eva Khmelinskaya
 #
 # References:
 # Terraform for Google: https://registry.terraform.io/providers/hashicorp/google/latest/docs
@@ -214,7 +214,7 @@ locals {
   local_storage_bucket = "${var.project_id}-${random_string.project_random.result}"
 
   # Use the GCP user or the service account running this in a DevOps process
-  local_impersonation_account = var.deployment_service_account_name == "" ? "user:${var.gcp_account_name}" : "serviceAccount:${var.deployment_service_account_name}"
+  local_impersonation_account = var.deployment_service_account_name == "" ? "user:${var.gcp_account_name}" : length(regexall("^serviceAccount:", var.deployment_service_account_name)) > 0 ? "${var.deployment_service_account_name}" : "serviceAccount:${var.deployment_service_account_name}"
 }
 
 
@@ -327,7 +327,8 @@ module "org-policies-deprecated" {
   depends_on = [
     module.project,
     module.service-account,
-    module.apis-batch-enable
+    module.apis-batch-enable,
+    time_sleep.service_account_api_activation_time_delay
   ]
 }
 
@@ -360,402 +361,402 @@ module "resources" {
 }
 
 
+#####################################################################################
+## Deploy BigQuery stored procedures / sql scripts
 ####################################################################################
-# Deploy BigQuery stored procedures / sql scripts
-###################################################################################
-module "sql-scripts" {
-  source = "../terraform-modules/sql-scripts"
-
-  # Use Service Account Impersonation for this step. 
-  providers = { google = google.service_principal_impersonation }
-
-  gcp_account_name                = var.gcp_account_name
-  project_id                      = local.local_project_id
-  region                          = var.region
-  zone                            = var.zone
-  storage_bucket                  = local.local_storage_bucket
-  random_extension                = random_string.project_random.result
-  project_number                  = var.project_number == "" ? module.project[0].output-project-number : var.project_number
-  deployment_service_account_name = var.deployment_service_account_name
-  bigquery_region                 = var.bigquery_region
-  omni_dataset                    = var.omni_dataset
-  omni_aws_connection             = var.omni_aws_connection
-  omni_aws_s3_bucket_name         = var.omni_aws_s3_bucket_name
-
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources
-  ]
-}
-
-
+#module "sql-scripts" {
+#  source = "../terraform-modules/sql-scripts"
+#
+#  # Use Service Account Impersonation for this step.
+#  providers = { google = google.service_principal_impersonation }
+#
+#  gcp_account_name                = var.gcp_account_name
+#  project_id                      = local.local_project_id
+#  region                          = var.region
+#  zone                            = var.zone
+#  storage_bucket                  = local.local_storage_bucket
+#  random_extension                = random_string.project_random.result
+#  project_number                  = var.project_number == "" ? module.project[0].output-project-number : var.project_number
+#  deployment_service_account_name = var.deployment_service_account_name
+#  bigquery_region                 = var.bigquery_region
+#  omni_dataset                    = var.omni_dataset
+#  omni_aws_connection             = var.omni_aws_connection
+#  omni_aws_s3_bucket_name         = var.omni_aws_s3_bucket_name
+#
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources
+#  ]
+#}
+#
+#
+#####################################################################################
+## Deploy "data" and "scripts"
 ####################################################################################
-# Deploy "data" and "scripts"
-###################################################################################
-# Upload the Airflow initial DAGs needed to run the system
-# Upload all the DAGs can cause issues since the Airflow instance is so small they call cannot sync
-# before run-all-dags is launched
-resource "null_resource" "deploy_initial_airflow_dags" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi  
-# gsutil cp ../cloud-composer/dags/* ${module.resources.output-composer-dag-bucket}
-gsutil cp ../cloud-composer/dags/run-all-dags.py ${module.resources.output-composer-dag-bucket}
-gsutil cp ../cloud-composer/dags/step-*.py ${module.resources.output-composer-dag-bucket}
-gsutil cp ../cloud-composer/dags/sample-dataflow-start-streaming-job.py ${module.resources.output-composer-dag-bucket}
-
-EOF    
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources
-  ]
-}
-
-
-# Upload the Airflow "data/template" files
-# The data folder is the same path as the DAGs, but just has DATA as the folder name
-resource "null_resource" "deploy_initial_airflow_dags_data" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi  
-gsutil cp ../cloud-composer/data/* ${replace(module.resources.output-composer-dag-bucket, "/dags", "/data")}
-EOF        
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources
-  ]
-}
-
-
-# Upload the PySpark scripts
-resource "null_resource" "deploy_dataproc_scripts" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi  
-gsutil cp ../dataproc/* gs://raw-${local.local_storage_bucket}/pyspark-code/
-EOF
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts
-  ]
-}
-
-
-# Upload the Dataflow scripts
-resource "null_resource" "deploy_dataflow_scripts" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi  
-gsutil cp ../dataflow/* gs://raw-${local.local_storage_bucket}/dataflow/
-EOF
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts
-  ]
-}
-
-# Replace the Bucket Name in the Jupyter notebooks
-resource "null_resource" "deploy_vertex_notebooks" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi
-find ../notebooks -type f -name "*.ipynb" -print0 | while IFS= read -r -d '' file; do
-    echo "Notebook Replacing: $${file}"
-    searchString="../notebooks/"
-    replaceString="../notebooks-with-substitution/"
-    destFile=$(echo "$${file//$searchString/$replaceString}")
-    echo "destFile: $${destFile}"
-    sed "s/REPLACE-BUCKET-NAME/processed-${local.local_storage_bucket}/g" "$${file}" > "$${destFile}.tmp"
-    sed "s/REPLACE-PROJECT-ID/${local.local_project_id}/g" "$${destFile}.tmp" > "$${destFile}"
-done
-gsutil cp ../notebooks-with-substitution/*.ipynb gs://processed-${local.local_storage_bucket}/notebooks/
-EOF
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts
-  ]
-}
-
-
-# Replace the Bucket Name in the Jupyter notebooks
-resource "null_resource" "deploy_bigspark" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi
-find ../bigspark -type f -name "*.py" -print0 | while IFS= read -r -d '' file; do
-    echo "BigSpark Replacing: $${file}"
-    searchString="../bigspark/"
-    replaceString="../bigspark-with-substitution/"
-    destFile=$(echo "$${file//$searchString/$replaceString}")
-    echo "destFile: $${destFile}"
-    sed "s/REPLACE-BUCKET-NAME/raw-${local.local_storage_bucket}/g" "$${file}" > "$${destFile}.tmp"
-    sed "s/REPLACE-PROJECT-ID/${local.local_project_id}/g" "$${destFile}.tmp" > "$${destFile}"
-done
-gsutil cp ../bigspark-with-substitution/*.py gs://raw-${local.local_storage_bucket}/bigspark/
-gsutil cp ../bigspark/*.csv gs://raw-${local.local_storage_bucket}/bigspark/
-EOF
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts
-  ]
-}
-
-
-# Upload the sample Delta.io files
-# The manifest files need to have the GCS bucket name updated
-resource "null_resource" "deploy_delta_io_files" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi
-cp -rf ../sample-data/rideshare_trips/* ../sample-data/rideshare_trips-with-substitution
-find ../sample-data/rideshare_trips/_symlink_format_manifest -type f -name "*" -print0 | while IFS= read -r -d '' file; do
-    echo "Updating Manifest file: $${file}"
-    searchString="../sample-data/rideshare_trips"
-    replaceString="../sample-data/rideshare_trips-with-substitution"
-    destFile=$(echo "$${file//$searchString/$replaceString}")
-    echo "destFile: $${destFile}"
-    sed "s/REPLACE-BUCKET-NAME/processed-${local.local_storage_bucket}/g" "$${file}" > "$${destFile}"
-done
-gsutil cp -r ../sample-data/rideshare_trips-with-substitution/* gs://processed-${local.local_storage_bucket}/delta_io/rideshare_trips/
-gsutil rm gs://processed-${local.local_storage_bucket}/delta_io/rideshare_trips/README.md
-EOF
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts
-  ]
-}
-
-
-
-# You need to wait for Airflow to read the DAGs just uploaded
-# Only a few DAGs are uploaded so that we can sync quicker
-resource "time_sleep" "wait_for_airflow_dag_sync" {
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts,
-    null_resource.deploy_initial_airflow_dags,
-    null_resource.deploy_initial_airflow_dags_data
-  ]
-  # This just a "guess" and might need to be extended.  The Composer (Airflow) cluster is sized very small so it 
-  # takes longer to sync the DAG files
-  create_duration = "180s"
-}
-
-
-# Kick off Airflow DAG
-resource "null_resource" "run_airflow_dag" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi  
-gcloud composer environments run ${module.resources.output-composer-name} --project ${local.local_project_id} --location ${var.region} dags trigger -- run-all-dags
-EOF
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts,
-    null_resource.deploy_initial_airflow_dags,
-    null_resource.deploy_initial_airflow_dags_data,
-    time_sleep.wait_for_airflow_dag_sync
-  ]
-}
-
-
-# Deploy all the DAGs (hopefully the initial ones have synced)
-# We overwrite the initial ones, but that should not matter
-resource "null_resource" "deploy_all_airflow_dags" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<EOF
-if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
-then
-    echo "We are not running in a local docker container.  No need to login."
-else
-    echo "We are running in local docker container. Logging in."
-    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
-    gcloud config set account "${var.deployment_service_account_name}"
-fi  
-gsutil cp ../cloud-composer/dags/* ${module.resources.output-composer-dag-bucket}
-
-EOF    
-  }
-  depends_on = [
-    module.project,
-    module.service-account,
-    module.apis-batch-enable,
-    time_sleep.service_account_api_activation_time_delay,
-    module.org-policies,
-    module.org-policies-deprecated,
-    module.resources,
-    module.sql-scripts,
-    null_resource.deploy_initial_airflow_dags,
-    null_resource.deploy_initial_airflow_dags_data,
-    time_sleep.wait_for_airflow_dag_sync,
-    null_resource.run_airflow_dag
-  ]
-}
-
-
-
-####################################################################################
-# Outputs (Gather from sub-modules)
-# Not really needed, but are outputted for viewing
-####################################################################################
-output "output-project-id" {
-  value = local.local_project_id
-}
-
-output "output-project-number" {
-  value = var.project_number == "" ? module.project[0].output-project-number : var.project_number
-}
-
-output "output-region" {
-  value = var.region
-}
-
-output "output-bucket-name" {
-  value = local.local_storage_bucket
-}
-
-output "output-composer-name" {
-  value = module.resources.output-composer-name
-}
-
-output "output-composer-region" {
-  value = module.resources.output-composer-region
-}
-
-output "output-composer-dag-bucket" {
-  value = module.resources.output-composer-dag-bucket
-}
-
-output "output-spanner-instance-id" {
-  value = module.resources.output-spanner-instance-id
-}
+## Upload the Airflow initial DAGs needed to run the system
+## Upload all the DAGs can cause issues since the Airflow instance is so small they call cannot sync
+## before run-all-dags is launched
+#resource "null_resource" "deploy_initial_airflow_dags" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+## gsutil cp ../cloud-composer/dags/* ${module.resources.output-composer-dag-bucket}
+#gsutil cp ../cloud-composer/dags/run-all-dags.py ${module.resources.output-composer-dag-bucket}
+#gsutil cp ../cloud-composer/dags/step-*.py ${module.resources.output-composer-dag-bucket}
+#gsutil cp ../cloud-composer/dags/sample-dataflow-start-streaming-job.py ${module.resources.output-composer-dag-bucket}
+#
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources
+#  ]
+#}
+#
+#
+## Upload the Airflow "data/template" files
+## The data folder is the same path as the DAGs, but just has DATA as the folder name
+#resource "null_resource" "deploy_initial_airflow_dags_data" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#gsutil cp ../cloud-composer/data/* ${replace(module.resources.output-composer-dag-bucket, "/dags", "/data")}
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources
+#  ]
+#}
+#
+#
+## Upload the PySpark scripts
+#resource "null_resource" "deploy_dataproc_scripts" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#gsutil cp ../dataproc/* gs://raw-${local.local_storage_bucket}/pyspark-code/
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts
+#  ]
+#}
+#
+#
+## Upload the Dataflow scripts
+#resource "null_resource" "deploy_dataflow_scripts" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#gsutil cp ../dataflow/* gs://raw-${local.local_storage_bucket}/dataflow/
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts
+#  ]
+#}
+#
+## Replace the Bucket Name in the Jupyter notebooks
+#resource "null_resource" "deploy_vertex_notebooks" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#find ../notebooks -type f -name "*.ipynb" -print0 | while IFS= read -r -d '' file; do
+#    echo "Notebook Replacing: $${file}"
+#    searchString="../notebooks/"
+#    replaceString="../notebooks-with-substitution/"
+#    destFile=$(echo "$${file//$searchString/$replaceString}")
+#    echo "destFile: $${destFile}"
+#    sed "s/REPLACE-BUCKET-NAME/processed-${local.local_storage_bucket}/g" "$${file}" > "$${destFile}.tmp"
+#    sed "s/REPLACE-PROJECT-ID/${local.local_project_id}/g" "$${destFile}.tmp" > "$${destFile}"
+#done
+#gsutil cp ../notebooks-with-substitution/*.ipynb gs://processed-${local.local_storage_bucket}/notebooks/
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts
+#  ]
+#}
+#
+#
+## Replace the Bucket Name in the Jupyter notebooks
+#resource "null_resource" "deploy_bigspark" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#find ../bigspark -type f -name "*.py" -print0 | while IFS= read -r -d '' file; do
+#    echo "BigSpark Replacing: $${file}"
+#    searchString="../bigspark/"
+#    replaceString="../bigspark-with-substitution/"
+#    destFile=$(echo "$${file//$searchString/$replaceString}")
+#    echo "destFile: $${destFile}"
+#    sed "s/REPLACE-BUCKET-NAME/raw-${local.local_storage_bucket}/g" "$${file}" > "$${destFile}.tmp"
+#    sed "s/REPLACE-PROJECT-ID/${local.local_project_id}/g" "$${destFile}.tmp" > "$${destFile}"
+#done
+#gsutil cp ../bigspark-with-substitution/*.py gs://raw-${local.local_storage_bucket}/bigspark/
+#gsutil cp ../bigspark/*.csv gs://raw-${local.local_storage_bucket}/bigspark/
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts
+#  ]
+#}
+#
+#
+## Upload the sample Delta.io files
+## The manifest files need to have the GCS bucket name updated
+#resource "null_resource" "deploy_delta_io_files" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#cp -rf ../sample-data/rideshare_trips/* ../sample-data/rideshare_trips-with-substitution
+#find ../sample-data/rideshare_trips/_symlink_format_manifest -type f -name "*" -print0 | while IFS= read -r -d '' file; do
+#    echo "Updating Manifest file: $${file}"
+#    searchString="../sample-data/rideshare_trips"
+#    replaceString="../sample-data/rideshare_trips-with-substitution"
+#    destFile=$(echo "$${file//$searchString/$replaceString}")
+#    echo "destFile: $${destFile}"
+#    sed "s/REPLACE-BUCKET-NAME/processed-${local.local_storage_bucket}/g" "$${file}" > "$${destFile}"
+#done
+#gsutil cp -r ../sample-data/rideshare_trips-with-substitution/* gs://processed-${local.local_storage_bucket}/delta_io/rideshare_trips/
+#gsutil rm gs://processed-${local.local_storage_bucket}/delta_io/rideshare_trips/README.md
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts
+#  ]
+#}
+#
+#
+#
+## You need to wait for Airflow to read the DAGs just uploaded
+## Only a few DAGs are uploaded so that we can sync quicker
+#resource "time_sleep" "wait_for_airflow_dag_sync" {
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts,
+#    null_resource.deploy_initial_airflow_dags,
+#    null_resource.deploy_initial_airflow_dags_data
+#  ]
+#  # This just a "guess" and might need to be extended.  The Composer (Airflow) cluster is sized very small so it
+#  # takes longer to sync the DAG files
+#  create_duration = "180s"
+#}
+#
+#
+## Kick off Airflow DAG
+#resource "null_resource" "run_airflow_dag" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#gcloud composer environments run ${module.resources.output-composer-name} --project ${local.local_project_id} --location ${var.region} dags trigger -- run-all-dags
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts,
+#    null_resource.deploy_initial_airflow_dags,
+#    null_resource.deploy_initial_airflow_dags_data,
+#    time_sleep.wait_for_airflow_dag_sync
+#  ]
+#}
+#
+#
+## Deploy all the DAGs (hopefully the initial ones have synced)
+## We overwrite the initial ones, but that should not matter
+#resource "null_resource" "deploy_all_airflow_dags" {
+#  provisioner "local-exec" {
+#    interpreter = ["/bin/bash", "-c"]
+#    command     = <<EOF
+#if [ -z "$${GOOGLE_APPLICATION_CREDENTIALS}" ]
+#then
+#    echo "We are not running in a local docker container.  No need to login."
+#else
+#    echo "We are running in local docker container. Logging in."
+#    gcloud auth activate-service-account "${var.deployment_service_account_name}" --key-file="$${GOOGLE_APPLICATION_CREDENTIALS}" --project="${var.project_id}"
+#    gcloud config set account "${var.deployment_service_account_name}"
+#fi
+#gsutil cp ../cloud-composer/dags/* ${module.resources.output-composer-dag-bucket}
+#
+#EOF
+#  }
+#  depends_on = [
+#    module.project,
+#    module.service-account,
+#    module.apis-batch-enable,
+#    time_sleep.service_account_api_activation_time_delay,
+#    module.org-policies,
+#    module.org-policies-deprecated,
+#    module.resources,
+#    module.sql-scripts,
+#    null_resource.deploy_initial_airflow_dags,
+#    null_resource.deploy_initial_airflow_dags_data,
+#    time_sleep.wait_for_airflow_dag_sync,
+#    null_resource.run_airflow_dag
+#  ]
+#}
+#
+#
+#
+#####################################################################################
+## Outputs (Gather from sub-modules)
+## Not really needed, but are outputted for viewing
+#####################################################################################
+#output "output-project-id" {
+#  value = local.local_project_id
+#}
+#
+#output "output-project-number" {
+#  value = var.project_number == "" ? module.project[0].output-project-number : var.project_number
+#}
+#
+#output "output-region" {
+#  value = var.region
+#}
+#
+#output "output-bucket-name" {
+#  value = local.local_storage_bucket
+#}
+#
+#output "output-composer-name" {
+#  value = module.resources.output-composer-name
+#}
+#
+#output "output-composer-region" {
+#  value = module.resources.output-composer-region
+#}
+#
+#output "output-composer-dag-bucket" {
+#  value = module.resources.output-composer-dag-bucket
+#}
+#
+#output "output-spanner-instance-id" {
+#  value = module.resources.output-spanner-instance-id
+#}
