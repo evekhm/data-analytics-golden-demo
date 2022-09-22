@@ -73,10 +73,10 @@ variable "gcp_account_name" {
 # CONDITIONS: (Always Required)
 variable "project_id" {
   type        = string
-  description = "The GCP Project Id/Name or the Prefix of a name to generate (e.g. data-analytics-demo-xxxxxxxxxx)."
+  description = "The GCP Project Id/Name or the Prefix of a name to generate (e.g. prior-auth-demo-xxxxxxxxxx)."
   validation {
-    condition     = length(var.project_id) > 0
-    error_message = "The project_id is required."
+    condition     = length(var.project_id) > 0 && length(var.project_id) < 20
+    error_message = "The project_id is required and needs to be less than 20 characters long."
   }
 }
 
@@ -193,6 +193,14 @@ variable "project_name" {
   default     = ""
 }
 
+variable "cluster_name" {
+  type    = string
+  default = "pa-cluster"
+  validation {
+    condition     = length(var.cluster_name) > 0
+    error_message = "The cluster name is required."
+  }
+}
 ####################################################################################
 # Local Variables 
 ####################################################################################
@@ -349,7 +357,7 @@ module "resources" {
   project_number                  = var.project_number == "" ? module.project[0].output-project-number : var.project_number
   deployment_service_account_name = var.deployment_service_account_name
   bigquery_region                 = var.bigquery_region
-
+  cluster_name                    = var.cluster_name
   depends_on = [
     module.project,
     module.service-account,
@@ -358,6 +366,7 @@ module "resources" {
     module.org-policies,
     module.org-policies-deprecated,
   ]
+
 }
 
 

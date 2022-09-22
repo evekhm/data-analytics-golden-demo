@@ -52,13 +52,13 @@ project_id            = os.environ['GCP_PROJECT']
 region                = os.environ['ENV_REGION'] 
 raw_bucket_name       = os.environ['ENV_RAW_BUCKET'] 
 taxi_dataset_id       = os.environ['ENV_TAXI_DATASET_ID'] 
-dataproc_bucket       = os.environ['ENV_DATAPROC_BUCKET'] 
+prior_auth_bucket       = os.environ['ENV_DATAPROC_BUCKET'] 
 dataflow_subnet       = os.environ['ENV_DATAFLOW_SUBNET'] 
 serviceAccount        = os.environ['ENV_DATAFLOW_SERVICE_ACCOUNT'] 
 
 output_table     = project_id + ":" + taxi_dataset_id + ".taxi_trips_streaming"
 dataflow_py_file = "gs://" + raw_bucket_name + "/dataflow/streaming-taxi-data.py"
-tempLocation     = "gs://" + dataproc_bucket + "/dataflow-temp/"
+tempLocation     = "gs://" + prior_auth_bucket + "/dataflow-temp/"
 
 print("output_table:     " + output_table)
 print("dataflow_py_file: " + dataflow_py_file)

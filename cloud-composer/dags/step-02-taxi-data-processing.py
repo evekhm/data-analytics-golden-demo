@@ -55,9 +55,9 @@ zone                     = os.environ['ENV_ZONE']
 yellow_source            = "gs://" + raw_bucket_name + "/raw/taxi-data/yellow/*/*.parquet"
 green_source             = "gs://" + raw_bucket_name + "/raw/taxi-data/green/*/*.parquet"
 destination              = "gs://" + processed_bucket_name + "/processed/taxi-data/"
-dataproc_bucket          = os.environ['ENV_DATAPROC_BUCKET'] 
-dataproc_subnet          = os.environ['ENV_DATAPROC_SUBNET'] 
-dataproc_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT'] 
+prior_auth_bucket          = os.environ['ENV_DATAPROC_BUCKET'] 
+cluster_subnet          = os.environ['ENV_DATAPROC_SUBNET'] 
+gsa_priauth_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT'] 
 
 # For small test run
 # yellow_source   = "gs://big-query-demo-09/test-taxi/yellow/*.parquet"
@@ -66,8 +66,8 @@ dataproc_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT']
 
 # https://cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
 CLUSTER_CONFIG = {
-    "config_bucket" : dataproc_bucket,
-    "temp_bucket": dataproc_bucket,
+    "config_bucket" : prior_auth_bucket,
+    "temp_bucket": prior_auth_bucket,
     "master_config": {
         "num_instances": 1,
         "machine_type_uri": "n1-standard-8",
@@ -80,8 +80,8 @@ CLUSTER_CONFIG = {
     },
     "gce_cluster_config" :{
         "zone_uri" : zone,
-        "subnetwork_uri" : dataproc_subnet,
-        "service_account" : dataproc_service_account,
+        "subnetwork_uri" : cluster_subnet,
+        "service_account" : gsa_priauth_service_account,
         "service_account_scopes" : ["https://www.googleapis.com/auth/cloud-platform"]
 
     }

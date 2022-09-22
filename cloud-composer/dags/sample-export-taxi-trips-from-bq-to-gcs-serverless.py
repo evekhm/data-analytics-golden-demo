@@ -58,9 +58,9 @@ processed_bucket_name    = "gs://" + os.environ['ENV_PROCESSED_BUCKET']
 pyspark_code             = "gs://" + raw_bucket_name + "/pyspark-code/export_taxi_data_from_bq_to_gcs.py"
 jar_file                 = "gs://" + raw_bucket_name + "/pyspark-code/spark-bigquery-with-dependencies_2.12-0.26.0.jar"
 # hardcoded the subnet name
-dataproc_subnet          = "bigspark-subnet"
-dataproc_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT'] 
-dataproc_bucket          = os.environ['ENV_DATAPROC_BUCKET'] 
+cluster_subnet          = "bigspark-subnet"
+gsa_priauth_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT'] 
+prior_auth_bucket          = os.environ['ENV_DATAPROC_BUCKET'] 
 bigspark_bucket          = os.environ['ENV_RAW_BUCKET'].replace("raw-","bigspark-")
 taxi_dataset_id          = os.environ['ENV_TAXI_DATASET_ID'] 
 
@@ -90,8 +90,8 @@ BATCH_CONFIG = {
     'environment_config':
         {'execution_config':
                 {
-                    'subnetwork_uri': dataproc_subnet,
-                    'service_account' : dataproc_service_account
+                    'subnetwork_uri': cluster_subnet,
+                    'service_account' : gsa_priauth_service_account
                     }
             },
     'runtime_config':

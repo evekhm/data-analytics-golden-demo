@@ -54,9 +54,9 @@ region                      = os.environ['ENV_REGION']
 zone                        = os.environ['ENV_ZONE'] 
 yellow_source               = "gs://" + raw_bucket_name + "/raw/taxi-data/yellow/*/*.parquet"
 green_source                = "gs://" + raw_bucket_name + "/raw/taxi-data/green/*/*.parquet"
-dataproc_bucket             = os.environ['ENV_DATAPROC_BUCKET'] 
-dataproc_subnet             = os.environ['ENV_DATAPROC_SUBNET'] 
-dataproc_service_account    = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT']
+prior_auth_bucket             = os.environ['ENV_DATAPROC_BUCKET'] 
+cluster_subnet             = os.environ['ENV_DATAPROC_SUBNET'] 
+gsa_priauth_service_account    = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT']
 
 icebergWarehouse            = "gs://" + processed_bucket_name + "/iceberg-warehouse"
 icebergJARFile              = "gs://" + raw_bucket_name + "/pyspark-code/iceberg-spark-runtime-3.1_2.12-0.14.0.jar"
@@ -64,8 +64,8 @@ icebergJARFile              = "gs://" + raw_bucket_name + "/pyspark-code/iceberg
 
 # https://cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
 CLUSTER_CONFIG = {
-    "config_bucket" : dataproc_bucket,
-    "temp_bucket": dataproc_bucket,
+    "config_bucket" : prior_auth_bucket,
+    "temp_bucket": prior_auth_bucket,
     "software_config": {
         "image_version": "2.0.47-debian10"
     },    
@@ -81,8 +81,8 @@ CLUSTER_CONFIG = {
     },
     "gce_cluster_config" :{
         "zone_uri" : zone,
-        "subnetwork_uri" : dataproc_subnet,
-        "service_account" : dataproc_service_account,
+        "subnetwork_uri" : cluster_subnet,
+        "service_account" : gsa_priauth_service_account,
         "service_account_scopes" : ["https://www.googleapis.com/auth/cloud-platform"]
     }
 }

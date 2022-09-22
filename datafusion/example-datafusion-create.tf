@@ -29,7 +29,7 @@ resource "google_data_fusion_instance" "df" {
   enable_stackdriver_logging    = true
   enable_stackdriver_monitoring = true
   version                       = "6.6.0"
-  # dataproc_service_account = "${google_project.prj.number}-compute@developer.gserviceaccount.com"
+  # gsa_priauth_service_account = "${google_project.prj.number}-compute@developer.gserviceaccount.com"
   depends_on = [module.project-services]
 }
 

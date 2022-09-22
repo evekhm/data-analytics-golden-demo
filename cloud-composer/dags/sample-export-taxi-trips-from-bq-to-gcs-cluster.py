@@ -58,9 +58,9 @@ processed_bucket_name    = "gs://" + os.environ['ENV_PROCESSED_BUCKET']
 pyspark_code             = "gs://" + raw_bucket_name + "/pyspark-code/export_taxi_data_from_bq_to_gcs.py"
 region                   = os.environ['ENV_REGION'] 
 zone                     = os.environ['ENV_ZONE'] 
-dataproc_bucket          = os.environ['ENV_DATAPROC_BUCKET'] 
-dataproc_subnet          = os.environ['ENV_DATAPROC_SUBNET'] 
-dataproc_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT']
+prior_auth_bucket          = os.environ['ENV_DATAPROC_BUCKET'] 
+cluster_subnet          = os.environ['ENV_DATAPROC_SUBNET'] 
+gsa_priauth_service_account = os.environ['ENV_DATAPROC_SERVICE_ACCOUNT']
 
 taxi_dataset_id          = os.environ['ENV_TAXI_DATASET_ID'] 
 jar_file                 = "gs://" + raw_bucket_name + "/pyspark-code/spark-bigquery-with-dependencies_2.12-0.26.0.jar"
@@ -68,8 +68,8 @@ jar_file                 = "gs://" + raw_bucket_name + "/pyspark-code/spark-bigq
 
 # https://cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
 CLUSTER_CONFIG = {
-    "config_bucket" : dataproc_bucket,
-    "temp_bucket": dataproc_bucket,
+    "config_bucket" : prior_auth_bucket,
+    "temp_bucket": prior_auth_bucket,
     "master_config": {
         "num_instances": 1,
         "machine_type_uri": "n1-standard-8",
@@ -82,8 +82,8 @@ CLUSTER_CONFIG = {
     },
     "gce_cluster_config" :{
         "zone_uri" : zone,
-        "subnetwork_uri" : dataproc_subnet,
-        "service_account" : dataproc_service_account,
+        "subnetwork_uri" : cluster_subnet,
+        "service_account" : gsa_priauth_service_account,
         "service_account_scopes" : ["https://www.googleapis.com/auth/cloud-platform"]
     }
 }
@@ -114,7 +114,7 @@ with airflow.DAG('sample-export-taxi-trips-from-bq-to-gcs-cluster',
         cluster_name='process-taxi-trips-export-{{ ts_nodash.lower() }}',
         dataproc_jars=[jar_file],
         main=pyspark_code,
-        arguments=[project_id, taxi_dataset_id, dataproc_bucket, processed_bucket_name])
+        arguments=[project_id, taxi_dataset_id, prior_auth_bucket, processed_bucket_name])
 
     # Delete Cloud Dataproc cluster
     delete_dataproc_export_cluster = dataproc_operator.DataprocClusterDeleteOperator(
