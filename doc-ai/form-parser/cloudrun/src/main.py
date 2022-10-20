@@ -1,0 +1,4 @@
+from extract import batch_extract_docs
+from common.config import GCS_INPUT_BUCKET_NAME, GCS_INPUT_URI_PREFIX
+
+batch_extract_docs(GCS_INPUT_BUCKET_NAME, GCS_INPUT_URI_PREFIX)
