@@ -11,10 +11,10 @@ from common.config import ENTITIES_TABLE_NAME
 def batch_transform(
 	entities_extracted_dict: Dict[str, Any],
 	context_args:  Dict[str, Any],
-	normilize_args: Dict[str, Any]  # such as mapping config
+	# normilize_args: Dict[str, Any]  # such as mapping config
 ):
 
-	print(f"{'*' * 15} Reading Transformation step on the retrieved entities {'*' * 15}")
+	print(f"{'*' * 15} Running Transformation step on the retrieved entities {'*' * 15}")
 	#####
 	# TODO Normalization
 	#####

@@ -1,0 +1,16 @@
+export DATASET_NAME="form_parser_results"
+export ENTITIES_TABLE_NAME="doc_ai_extracted_entities"
+export PROCESSOR_ID="5413472e98d80936"
+export BUCKET_NAME="${PROJECT_ID}"
+export GCS_INPUT_PREFIX="pa-forms"
+export IMAGE='pa-parser' #For Cloud Run Job
+
+export REGION="us-central1"
+
+export JOB="forms-parser-batch"
+export SERVICE_ACCOUNT_NAME="my-docai-sa"
+
+export PROCESSORS_CONFIG="gs://${BUCKET_NAME}/demo/processors.json"
+export SERVICE_ACCOUNT=${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com
+#gcloud config set run/region ${REGION}
+echo "...."
