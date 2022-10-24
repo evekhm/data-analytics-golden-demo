@@ -1,5 +1,6 @@
 from google.cloud import storage
 from google.cloud import logging
+from extract import PROCESSORS
 from common.processor import Processor
 
 # Instantiates a client
@@ -10,7 +11,11 @@ logger = logging_client.logger(__name__)
 storage_client = storage.Client()
 
 processor_to_forms = {}
-PROCESSORS = Processor.load_processors()
+
+# If the document types contain similar fields but different layout.
+# You might still be able to train a single model for them.
+# But if you have different models you can run a classifier as pre-step and send docs to resp. model.
+# DocumentAI Workbench also includes Custom Document Classifier, currently in private preview.
 
 
 def select_processor(

@@ -1,5 +1,6 @@
 import re
 
+from transform import batch_transform
 from common.utils import extract_form_fields, clean_form_parser_keys, \
 	strip_value
 from google.cloud import documentai_v1 as documentai
@@ -10,7 +11,7 @@ from common.processor import Processor
 from common.config import PROJECT_ID, DATASET_NAME, ENTITIES_TABLE_NAME, GCS_INPUT_BUCKET_NAME
 import classify
 from typing import Any, Dict, List
-from insert import write_to_bq
+
 # Instantiates a client
 logging_client = logging.Client()
 logging_client.setup_logging()
@@ -84,9 +85,36 @@ def batch_extract_docs(
 			document_output_config=output_config,
 		)
 
+		# async def my_callback(future):
+		# 	result = await future.result()
+		# 	print("Done!")
+
 		operation = docai_client.batch_process_documents(request)
-		# Wait for the operation to finish
-		operation.result(timeout=timeout)
+		# operation.add_done_callback(my_callback)
+
+		print(f"Waiting for operation {operation.operation.name} to complete...")
+
+		# async def my_callback(future):
+		# 	result = await future.result()
+		# 	# Once the operation is complete,
+		# 	# get output document information from operation metadata
+		# 	metadata = documentai.BatchProcessMetadata(operation.metadata)
+		#
+		# 	if metadata.state != documentai.BatchProcessMetadata.State.SUCCEEDED:
+		# 		raise ValueError(f"Batch Process Failed: {metadata.state_message}")
+		#
+		# 	for process in metadata.individual_process_statuses:
+		# 		# output_gcs_destination format: gs://BUCKET/PREFIX/OPERATION_NUMBER/0
+		# 		# The GCS API requires the bucket name and URI prefix separately
+		# 		output_bucket, output_prefix = re.match(
+		# 			r"gs://(.*?)/(.*)", process.output_gcs_destination
+		# 		).groups()
+		#
+		# 		extract_from_json(output_bucket, output_prefix, process.input_gcs_source)
+
+		# operation.add_done_callback(my_callback)
+		# # Wait for the operation to finish
+		result = operation.result(timeout=timeout)
 
 		# Once the operation is complete,
 		# get output document information from operation metadata
@@ -125,8 +153,11 @@ def batch_extract_docs(
 			processor_to_forms[processor].append(gcs_document)
 
 	# TODO Can be run in parallel tasks no sequential
+	tasks = []
+
 	for _processor_ in processor_to_forms:
 		process_forms(_processor_, processor_to_forms[_processor_])
+
 
 
 def get_document_protos_from_gcs(
@@ -253,51 +284,6 @@ def find_processor(name: str, processors: List[Processor]):
 	return None
 
 
-# def extract_document_entities(document: documentai.Document) -> dict:
-# 	"""
-# 	Get all entities from a document and output as a dictionary
-# 	Flattens nested entities/properties
-# 	Format: entity.type_: entity.mention_text OR entity.normalized_value.text
-# 	"""
-# 	document_entities: Dict[str, Any] = {}
-#
-# 	def extract_document_entity(entity: documentai.Document.Entity):
-# 		"""
-# 		Extract Single Entity and Add to Entity Dictionary
-# 		"""
-# 		entity_key = entity.type_.replace("/", "_")
-# 		normalized_value = getattr(entity, "normalized_value", None)
-#
-# 		new_entity_value = (
-# 			normalized_value.text if normalized_value else entity.mention_text
-# 		)
-#
-# 		existing_entity = document_entities.get(entity_key)
-#
-# 		# For entities that can have multiple (e.g. line_item)
-# 		if existing_entity:
-# 			# Change Entity Type to a List
-# 			if not isinstance(existing_entity, list):
-# 				existing_entity = list([existing_entity])
-#
-# 			existing_entity.append(new_entity_value)
-# 			document_entities[entity_key] = existing_entity
-# 		else:
-# 			document_entities.update({entity_key: new_entity_value})
-#
-# 	for entity in document.entities:
-# 		# Fields detected. For a full list of fields for each processor see
-# 		# the processor documentation:
-# 		# https://cloud.google.com/document-ai/docs/processors-list
-# 		extract_document_entity(entity)
-#
-# 		# Properties are Sub-Entities
-# 		for prop in entity.properties:
-# 			extract_document_entity(prop)
-#
-# 	return document_entities
-
-
 # Uses json output from DocAI operations
 def extract_from_json(
 	output_bucket: str,  # Format: gs://{bucket_name}/full/path/to/operationid
@@ -331,21 +317,42 @@ def extract_from_json(
 			extract_document_entities_form(document, document_entities)
 			for k in document_entities.keys():
 				print(f"{k}: {document_entities[k]}")
-		# 	extracted_entity_list.append(extracted_dict_list)
-		# 	for doc in extracted_entity_list:
-		# 		for entity in doc:
-		# 			print(f" ==> {entity['key']} = {entity['value']}, confidence = {entity['value_confidence']}")
-		# else:
-		# 	print(f"Skipping non-supported file type {blob.name}")
 
 	# print(json.dumps(entity, indent=4, sort_keys=True))
 	context_args = {
 		"input_file": input_filename,
 		"parser": parser_details
 	}
-	write_to_bq(DATASET_NAME, ENTITIES_TABLE_NAME, document_entities, context_args)
+	batch_transform(document_entities, context_args)
 
 
+# def task_cb(context):
+# 	print("Task completion received...")
+# 	print("Name of the task:%s"%context.get_name())
+# 	print("Wrapped coroutine object:%s"%context.get_coro())
+# 	print("Task is done:%s"%context.done())
+# 	print("Task has been cancelled:%s"%context.cancelled())
+# 	print("Task result:%s"%context.result())
+# 	print(type(context))
+# 	print(context)
+#
+# # A simple Python coroutine
+# async def simple_coroutine():
+# 	await asyncio.sleep(1)
+# 	return 1
+#
+# async def main():
+# 	t1 = asyncio.create_task(simple_coroutine())
+# 	t1.add_done_callback(task_cb)
+# 	await t1
+# 	print("Coroutine main() exiting")
 
-batch_extract_docs(GCS_INPUT_BUCKET_NAME, "pa-forms")
+# el = asyncio.new_event_loop()
+# asyncio.set_event_loop(el)
+# asyncio.run(batch_extract_docs(GCS_INPUT_BUCKET_NAME, "test"))
+
+batch_extract_docs(GCS_INPUT_BUCKET_NAME, "test")
+# asyncio.run(batch_extract_docs(GCS_INPUT_BUCKET_NAME, "pa-forms"))
 #extract_from_json(GCS_INPUT_BUCKET_NAME, "output/default/14391054591511450495/0", "default-form")
+
+

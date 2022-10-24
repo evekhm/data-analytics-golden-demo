@@ -1,0 +1,49 @@
+{
+  "processors": [
+    {
+      "name": "CVS_FORM_GENERIC",
+      "description": "Processor for CVS Generic PA Forms",
+      "id": "5413472e98d80936",
+      "type": "FORM",
+      "location": "us",
+      "mapping_file": "gs://some_path/to/mapping",
+      "golden_forms": "gs://path/to/golden/forms/to/compare"
+    },
+    {
+      "name": "CVS_FORM_CA",
+      "description": "PA Form for CVS California",
+      "id": "5413472e98d80936",
+      "type": "FORM",
+      "location": "us",
+      "mapping_file": "gs://some_path/to/mapping",
+      "golden_forms": "gs://path/to/golden/forms/to/compare"
+    },
+    {
+      "name": "RX_FORM",
+      "description": "PA Form for Rx of type 1",
+      "id": "5413472e98d80936",
+      "type": "FORM",
+      "location": "us",
+      "mapping_file": "gs://some_path/to/mapping",
+      "golden_forms": "gs://path/to/golden/forms/to/compare"
+    },
+    {
+      "name": "default",
+      "description": "default",
+      "id": "ca6883c466aca39b",
+      "type": "FORM",
+      "location": "us",
+      "mapping_file": "gs://some_path/to/mapping",
+      "golden_forms": "gs://path/to/golden/forms/to/compare"
+    },
+    {
+      "name": "BSC",
+      "description": "Blue Shield of California",
+      "id": "5413472e98d80936",
+      "type": "FORM",
+      "location": "us",
+      "mapping_file": "gs://some_path/to/mapping",
+      "golden_forms": "gs://path/to/golden/forms/to/compare"
+    }
+  ]
+}
